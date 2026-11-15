@@ -1,0 +1,7 @@
+gnb/logs/*
+!gnb/logs/.gitkeep
+!gnb/logs/.gitignore
+5gcore/media/*
+!5gcore/media/.gitkeep
+__pycache__/
+*.pyc
