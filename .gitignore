@@ -5,3 +5,6 @@ gnb/logs/*
 !5gcore/media/.gitkeep
 __pycache__/
 *.pyc
+ue/.build/
+ue/logs/*
+!ue/logs/.gitkeep

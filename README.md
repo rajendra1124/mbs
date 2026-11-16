@@ -6,7 +6,9 @@ Over-the-air 5G NR broadcast (point-to-multipoint, PTM) on software-defined radi
   that creates broadcast sessions and streams video or text. Runs from pre-built, digest-pinned Docker images.
 - **gnb/** – OCUDU gNB with our MBS extension (NGAP broadcast session, E1AP/F1AP MBS contexts, SIB20/MCCH,
   broadcast MRB, G-RNTI MTCH scheduling) in a Docker image that includes UHD and the USRP B210 firmware/FPGA images.
-- **ue/** – receiver (srsRAN-based MBS UE); to be added.
+- **ue/** – receive-only MBS UE (srsRAN_4G with our MBS receiver: SIB20/MCCH, G-RNTI PDCCH/PDSCH, MRB → UDP video),
+  prebuilt and self-contained: the receiver, every library it needs (UHD, FFTW, Boost, glibc, …) and the B210 firmware
+  are in the folder, so it starts right after `git clone`, with no build and no Docker.
 
 ```
  AF/AS ──Nmbsmf──► MB-SMF ──► AMF ──NGAP──► gNB (B210) ═══ MTCH on G-RNTI 0xFE01 ═══► UE 1 … UE N
@@ -46,6 +48,35 @@ grep -E "Joined multicast group|MTCH: rnti=0xfe01" gnb/logs/gnb.log | tail -3
 
 Stop: `./gnb/stop.sh && ./5gcore/stop.sh` (subscribers are kept).
 
+## Quick start (UE PC)
+
+Any number of UE PCs can receive the broadcast. The UE is receive-only, so it needs no SIM, subscriber entry or uplink.
+
+| | |
+|---|---|
+| OS | Linux x86-64 (tested on Ubuntu 24.04). CPU with AVX2/FMA (Intel Haswell / AMD Zen or newer) |
+| Software | Nothing to build. Optional: VLC, ffplay or mpv to watch the video (`sudo apt install vlc`) |
+| Radio | USRP **B200/B210** on a **USB 3** port, tuned by default to the gNB cell above |
+
+```bash
+git clone https://github.com/rajendra1124/mbs.git && cd mbs
+
+sudo ./ue/setup-usb.sh                  # once per PC: USB permissions for the USRP, then replug it
+./ue/start.sh                           # receiver + video player; Ctrl-C stops both
+#   DETACH=1 ./ue/start.sh  -> background, no player; ./ue/stop.sh stops it
+#   RF_GAIN=60 PLAYER=ffplay RECORD=0 ./ue/start.sh   (all settings: ue/config/ue.env)
+```
+
+The UE can start before or after `activate-broadcast.sh`; it keeps searching until the cell is on air. The log is
+`ue/logs/ue.log`, with a `slots=… crc_ok=… sdus=…` line every second. The received MPEG-TS goes to
+`udp://127.0.0.1:5005` and is also recorded to `/dev/shm/mbs_ue/received_<time>.ts` (in RAM; `RECORD=0` turns this
+off, `SAVE_DIR=` changes the folder). `./ue/check-usrp.sh` probes the radio with the bundled UHD. With several USRPs
+attached, select one with `RF_ARGS='type=b200,serial=XXXXXXX,num_recv_frames=512'`.
+
+How it is self-contained: `ue/start.sh` runs `ue/bin/srsue_mbs` through the bundled loader
+(`ue/lib/ld-linux-x86-64.so.2 --library-path ue/lib`). The UE therefore uses only the libraries in `ue/lib`, whatever
+the host has installed (or not), and UHD reads the B2xx images from `ue/share/uhd/images`.
+
 ## Cell and broadcast configuration
 
 | Parameter | Value |
@@ -74,6 +105,14 @@ Edit `gnb/config/gnb.yml` (frequency, gain, PLMN) and `5gcore/configs/*.yaml` to
 `gnb/Dockerfile` clones upstream OCUDU at commit `1ba4cdf2ed` and applies `gnb/patches/0001-ocudu-mbs-broadcast.patch`
 (our MBS changes). Build locally with `docker build -t ghcr.io/rajendra1124/mbs-gnb:latest gnb/`.
 
+## Rebuilding the UE bundle
+
+`ue/build-from-source.sh` clones upstream srsRAN_4G at tag `release_25_10` (commit `6bcbd9e5bf`), applies
+`ue/patches/0001-srsran4g-mbs-receiver.patch` (our MBS receiver), builds for x86-64-v3, runs the MBS unit tests and
+refreshes `ue/bin`, `ue/lib` and `ue/share`. Run it on Ubuntu 24.04 x86-64 (`INSTALL_DEPS=1` installs the build
+packages and UHD 4.11 from the Ettus PPA). `SRC_TREE=/path/to/srsRAN_4G ./ue/build-from-source.sh` bundles a tree you
+are developing in instead. `ue/share/BUILDINFO` records what the current bundle was built from.
+
 ## Status and known limitations
 
 This is a research prototype, not a full Rel-17 conformance implementation. Known gaps: MCCH is scrambled with SI-RNTI
@@ -87,6 +126,10 @@ restart `smf_mb-smf upf_mb-upf amf_with_mbs` after many sessions.
 - 5G-MAG reference tools (core images, AF/AS test code): 5G-MAG Public License v1.0, see `5gcore/LICENSE-5G-MAG.md` and
   `5gcore/ATTRIBUTION_NOTICE-5G-MAG` (the core images include Open5GS, AGPL-3.0).
 - UHD: GPL-3.0 (Ettus Research), installed from Ubuntu packages inside the gNB image.
+- UE (`ue/`): srsRAN_4G and our patch to it are AGPL-3.0 (`ue/LICENSE-srsRAN`, `ue/COPYRIGHT-srsRAN`); the source of the
+  bundled receiver is upstream `release_25_10` plus `ue/patches/`. The bundled libraries are unmodified Ubuntu 24.04 /
+  Ettus PPA packages under their own licences (UHD GPL-3.0, FFTW GPL-2.0+, glibc LGPL-2.1+, Boost BSL-1.0, …);
+  `ue/share/THIRD_PARTY.txt` lists the package and version of each file, and `apt-get source <package>` fetches its source.
 
 ## Citation
 
