@@ -1,5 +1,14 @@
 # MBS: 5G NR Multicast/Broadcast (Rel-17) with an open 5G core and the OCUDU gNB
 
+## About
+
+An open, end-to-end Direct-to-Mobile (D2M) testbed in the cellular band, based on 3GPP Rel-17 5G NR Multicast/Broadcast
+Services (MBS) over software-defined radio. A 5G core creates a broadcast session, an OCUDU gNB sends it once over the
+air on a group RNTI with a USRP B210, and any number of srsRAN-based receive-only UEs (no SIM, no uplink) decode it and
+play the video live.
+
+## Components
+
 Over-the-air 5G NR broadcast (point-to-multipoint, PTM) on software-defined radio:
 
 - **5gcore/** – 5G core with MBS (5G-MAG reference tools, Open5GS based: AMF, MB-SMF, MB-UPF, …) and an AF/AS
